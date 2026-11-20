@@ -203,3 +203,76 @@ wfs = [
 for w in wfs:
     json.dump([w], open(f"/mnt/user-data/outputs/n8n-{w['id']}.json", "w"), ensure_ascii=False, indent=1)
 print("ok", [w["name"] for w in wfs])
+
+# ---------- Routines récurrentes → tâches Pilotage ----------
+ROUTINES = {
+    "hebdo": ("[Hebdo]", "friday", [
+        ("Revoir les mises à jour en attente dans MainWP", "MainWP", "Haute",
+         "Tableau de bord Pilotage, bloc MainWP, ou MainWP > Mises à jour. Repérer les extensions abandonnées ou les mises à jour majeures."),
+        ("Sauvegarder puis appliquer les mises à jour depuis la ligne du site principal", "MainWP", "Haute",
+         "Sauvegarde de la base des réseaux concernés avant d'appliquer les mises à jour depuis la ligne du site principal dans MainWP."),
+        ("Après une mise à jour du cœur WordPress : lancer « Mettre à jour le réseau » sur chaque réseau", "WordPress", "Normale",
+         "MainWP ne met à jour que la base du site principal. Admin réseau > Tableau de bord > Mettre à jour le réseau (e-delmotte.info, echecs54.org, monclubdechecs.fr, ffechecs.fr, ffechecs.org)."),
+        ("Enregistrer les mises à jour majeures comme changement dans iTop", "iTop", "Normale",
+         "Gestion des changements > Nouveau changement (type Normal ou Routine), CIs concernés, plan de retour arrière."),
+    ]),
+    "mensuel": ("[Mensuel]", "month", [
+        ("Faire un snapshot du VPS, puis mettre à jour les images Docker", "VPS", "Haute",
+         "sudo ovh-snapshot \"avant mise à jour mensuelle\" puis, service par service : sudo docker compose pull && sudo docker compose up -d. Vérifier Kuma ensuite."),
+        ("Vérifier les journaux de sauvegarde", "VPS", "Normale",
+         "Contrôler que les sauvegardes de la nuit se sont bien terminées tout le mois (étape 11 du plan)."),
+        ("Relire les alertes Uptime Kuma du mois", "Uptime Kuma", "Normale",
+         "status.e-delmotte.fr : incidents du mois, sondes en pause, sites lents. Incidents iTop [Kuma] du mois."),
+        ("Contrôler les expirations de domaines et de certificats SSL", "Nom de domaine", "Normale",
+         "Domaines : rappel automatique à J-15 déjà en place (vérifier qu'il a tourné). Certificats : alertes Kuma, onglet Certificats SSL des hébergements OVH."),
+        ("Vérifier la sauvegarde du tableau de bord MainWP", "MainWP", "Normale",
+         "Base mainwp et volume WordPress de MainWP inclus dans la sauvegarde du VPS."),
+    ]),
+    "trimestre": ("[Trimestre]", "quarter", [
+        ("Faire un test de restauration et l'enregistrer comme changement dans iTop", "VPS", "Haute",
+         "Restaurer une base (ex. iTop ou un sous-site WordPress) dans un environnement de test, vérifier, puis tracer le test comme changement dans iTop."),
+        ("Relire les accès Bitwarden et retirer ceux qui ne servent plus", "Autre", "Normale",
+         "Comptes clients, OVH, WordPress, API : supprimer les accès obsolètes et changer les mots de passe partagés si besoin."),
+    ]),
+}
+
+ROUTINE_JS = r"""
+const PREFIXE = __PREFIXE__, ECHEANCE = __ECHEANCE__, TACHES = __TACHES__;
+const h = this.helpers, base = 'http://pilotage:8000/api/tasks';
+const ouvertes = await h.httpRequest({ method: 'GET', url: base, json: true });
+const now = new Date(), d = new Date(now);
+if (ECHEANCE === 'friday') d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7));
+if (ECHEANCE === 'month') { d.setMonth(d.getMonth() + 1, 0); }
+if (ECHEANCE === 'quarter') { d.setMonth(Math.floor(d.getMonth() / 3) * 3 + 3, 0); }
+const due = d.toISOString().slice(0, 10);
+const crees = [];
+for (const [titre, plateforme, priorite, detail] of TACHES) {
+  const t = `${PREFIXE} ${titre}`;
+  if (ouvertes.some(o => o.title === t)) continue;   // déjà dans la liste : pas de doublon
+  await h.httpRequest({ method: 'POST', url: base, json: true, body: {
+    title: t, client: 'e-delmotte (Eric Delmotte)', platform: plateforme, priority: priorite, status: 'À faire', due, detail } });
+  crees.push(t);
+}
+return [{ json: { ok: true, crees } }];
+"""
+
+def routine_wf():
+    triggers = [("Chaque lundi 7 h 45", "45 7 * * 1", "hebdo"),
+                ("Le 1er du mois 7 h 50", "50 7 1 * *", "mensuel"),
+                ("Début de trimestre 7 h 55", "55 7 1 1,4,7,10 *", "trimestre")]
+    nodes, conns = [], {}
+    for i, (tname, cron, key) in enumerate(triggers):
+        pref, ech, taches = ROUTINES[key]
+        js = (ROUTINE_JS.replace("__PREFIXE__", json.dumps(pref, ensure_ascii=False))
+              .replace("__ECHEANCE__", json.dumps(ech)).replace("__TACHES__", json.dumps(taches, ensure_ascii=False)))
+        cname = f"Tâches {key}"
+        nodes.append({"parameters": {"rule": {"interval": [{"field": "cronExpression", "expression": cron}]}},
+                      "id": str(uuid.uuid4()), "name": tname, "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [0, i * 200]})
+        nodes.append(code_node(cname, js, [260, i * 200]))
+        conns[tname] = {"main": [[{"node": cname, "type": "main", "index": 0}]]}
+    return {"id": "RoutinesTaches0001", "name": "Routines récurrentes → tâches Pilotage", "active": False,
+            "nodes": nodes, "connections": conns, "settings": {"executionOrder": "v1", "timezone": "Europe/Paris"}}
+
+w = routine_wf()
+json.dump([w], open(f"/mnt/user-data/outputs/n8n-{w['id']}.json", "w"), ensure_ascii=False, indent=1)
+print("ok", w["name"])
