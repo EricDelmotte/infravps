@@ -50,6 +50,17 @@ const nom = cut(b.nom, 100), email = cut(b.email, 150), msg = cut(b.message, 500
 const source = cut(b.source || 'formulaire', 60), ip = cut(b.ip, 60), tel = cut(b.telephone, 40);
 if (!nom || !email || !msg) return [{ json: { ok: false, error: 'champs manquants' } }];
 
+// Sites sans ticket iTop : le message devient une tâche du tableau de bord Pilotage
+const SANS_TICKET = /arbitre-echecs/i;
+if (SANS_TICKET.test(source)) {
+  const premiere0 = (msg.split('\n').find(l => l.trim()) || msg).trim();
+  await h.httpRequest({ method: 'POST', url: 'http://pilotage:8000/api/tasks', json: true, body: {
+    title: `Contact ${source} : ${nom} — ${premiere0.slice(0, 60)}${premiere0.length > 60 ? '…' : ''}`,
+    client: '', platform: 'Arbitrage', priority: 'Normale', status: 'À faire', due: '',
+    detail: `De : ${nom} <${email}>${tel ? ' — ' + tel : ''}\n\n${msg}` } });
+  return [{ json: { ok: true, ref: 'tâche Pilotage', type: 'tache' } }];
+}
+
 const edm = await orgEdelmotte();
 let org = edm, caller = null, connu = false;
 const p = (await itop({ operation: 'core/get', class: 'Person', key: `SELECT Person WHERE email = "${q(email)}"`, output_fields: 'org_id' }))[0];

@@ -23,7 +23,7 @@ Réseau Docker externe partagé : `proxy` (Caddy ↔ services). Chaque base de d
 
 | Workflow | Déclencheur | Effet |
 |---|---|---|
-| Formulaire de contact → ticket iTop | `POST /webhook/formulaire` (en-tête `X-Formulaire-Secret`) | Crée une demande ou un incident, rattaché au client si l'e-mail est connu et au site concerné |
+| Formulaire de contact → ticket iTop | `POST /webhook/formulaire` (en-tête `X-Formulaire-Secret`) | Crée une demande ou un incident, rattaché au client si l'e-mail est connu et au site concerné. Exception : www.arbitre-echecs.fr → tâche du tableau de bord Pilotage, sans ticket |
 | Alerte Uptime Kuma → incident iTop | notification Kuma « n8n → iTop » vers `http://n8n:5678/webhook/kuma` (réseau interne uniquement, bloqué par Caddy depuis Internet) | Incident à la panne, résolution automatique au retour |
 | Échéances des domaines à J-15 | tous les jours à 8 h 05 | Ticket + tâche dans le tableau de bord : vérifier le renouvellement automatique, ou confirmer avec le client si renouvellement manuel |
 
