@@ -117,3 +117,30 @@ auto.e-delmotte.fr {
 		reverse_proxy n8n:5678
 	}
 }
+
+# Alias clients : portail de support iTop (adresse canonique : itsm.e-delmotte.fr)
+support.e-delmotte.com, support.e-delmotte.fr {
+	redir https://itsm.e-delmotte.fr/pages/exec.php?exec_module=itop-portal-base&exec_page=index.php&portal_id=itop-portal 302
+}
+
+# Alias clients : pages d état Uptime Kuma
+status.e-delmotte.com {
+	encode gzip
+	@racine path /
+	redir @racine /status/e-delmotte 302
+	reverse_proxy uptime-kuma:3001
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+# Alias de secours en .com : renvoient vers les adresses officielles en .fr
+docs.e-delmotte.com {
+	redir https://docs.e-delmotte.fr{uri} 302
+}
+itsm.e-delmotte.com {
+	redir https://itsm.e-delmotte.fr{uri} 302
+}
