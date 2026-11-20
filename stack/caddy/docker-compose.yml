@@ -1,0 +1,21 @@
+services:
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./conf:/etc/caddy:ro
+      - /opt/stack/site-fr/src:/var/www/site-fr:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - proxy
+networks:
+  proxy:
+    external: true
+volumes:
+  caddy_data:
+  caddy_config:

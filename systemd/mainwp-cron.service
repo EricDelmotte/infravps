@@ -1,0 +1,5 @@
+[Unit]
+Description=Taches planifiees WordPress de MainWP (remplace wp-cron)
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -u www-data mainwp sh -c "wp core is-installed 2>/dev/null && wp cron event run --due-now --quiet 2>/dev/null || true"

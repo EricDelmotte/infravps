@@ -1,0 +1,45 @@
+services:
+  db:
+    image: mariadb:11
+    container_name: mainwp-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: mainwp
+      MARIADB_USER: mainwp
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+    volumes:
+      - db:/var/lib/mysql
+      - ./secrets/db_password:/run/secrets/db_password:ro
+      - ./secrets/db_root_password:/run/secrets/db_root_password:ro
+    networks: [interne]
+  wordpress:
+    image: wordpress:php8.4-apache
+    container_name: mainwp
+    restart: unless-stopped
+    depends_on: [db]
+    environment:
+      WORDPRESS_DB_HOST: mainwp-db
+      WORDPRESS_DB_NAME: mainwp
+      WORDPRESS_DB_USER: mainwp
+      WORDPRESS_DB_PASSWORD_FILE: /run/secrets/db_password
+      WORDPRESS_CONFIG_EXTRA: |
+        define("DISABLE_WP_CRON", true);
+        define("WP_MEMORY_LIMIT", "1024M");
+        define("WP_MAX_MEMORY_LIMIT", "1024M");
+        define("DISALLOW_FILE_EDIT", true);
+        if (isset($$_SERVER["HTTP_X_FORWARDED_PROTO"]) && $$_SERVER["HTTP_X_FORWARDED_PROTO"] === "https") { $$_SERVER["HTTPS"] = "on"; }
+    volumes:
+      - wp:/var/www/html
+      - ./php-mainwp.ini:/usr/local/etc/php/conf.d/zz-mainwp.ini:ro
+      - ./wp-cli.phar:/usr/local/bin/wp:ro
+      - /opt/stack/site-fr/secrets/smtp_password:/run/secrets/smtp_password:ro
+      - ./secrets/db_password:/run/secrets/db_password:ro
+    networks: [interne, proxy]
+networks:
+  interne:
+  proxy:
+    external: true
+volumes:
+  db:
+  wp:

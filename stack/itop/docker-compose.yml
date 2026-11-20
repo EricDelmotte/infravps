@@ -1,0 +1,35 @@
+services:
+  db:
+    image: mariadb:11
+    container_name: itop-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: itop
+      MARIADB_USER: itop
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - db:/var/lib/mysql
+      - ./secrets/db_password:/run/secrets/db_password:ro
+    networks:
+      - interne
+  itop:
+    build: .
+    image: itop-local:3.3.0-1
+    container_name: itop
+    restart: unless-stopped
+    depends_on:
+      - db
+    volumes:
+      - ./web:/var/www/html
+      - /opt/stack/site-fr/secrets/smtp_password:/run/secrets/smtp_password:ro
+      - ./secrets/cron.params:/run/secrets/cron.params:ro
+    networks:
+      - interne
+      - proxy
+volumes:
+  db:
+networks:
+  interne:
+  proxy:
+    external: true

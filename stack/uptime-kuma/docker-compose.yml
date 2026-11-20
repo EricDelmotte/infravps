@@ -1,0 +1,16 @@
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:2
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - data:/app/data
+    environment:
+      - TZ=Europe/Paris
+    networks:
+      - proxy
+volumes:
+  data:
+networks:
+  proxy:
+    external: true

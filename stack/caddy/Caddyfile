@@ -1,0 +1,119 @@
+# Bloc commun au site e-delmotte.fr
+(site_fr) {
+	root * /var/www/site-fr
+	@prive path /.git* /.github* /README.md
+	respond @prive 404
+	encode gzip
+	@php path *.php
+	php_fastcgi @php site-fr-php:9000 {
+		env CONTACT_FROM no-reply@e-delmotte.com
+	}
+	file_server
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+# Site public : adresse principale www.e-delmotte.fr (servi par le VPS depuis le 19/11/2026)
+www.e-delmotte.fr {
+	import site_fr
+	header Strict-Transport-Security "max-age=31536000"
+}
+e-delmotte.fr {
+	redir https://www.e-delmotte.fr{uri} permanent
+}
+
+# MainWP (tableau de bord WordPress), conteneur mainwp
+moniteur-wp.e-delmotte.fr {
+	encode gzip
+	@accueil path /
+	redir @accueil /wp-admin/
+	@xmlrpc path /xmlrpc.php
+	respond @xmlrpc 403
+	reverse_proxy mainwp:80
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options SAMEORIGIN
+		-Server
+	}
+}
+
+status.e-delmotte.fr {
+	encode gzip
+	reverse_proxy uptime-kuma:3001
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+# iTop (ITSM et CMDB), conteneur itop
+itsm.e-delmotte.fr {
+	encode gzip
+	@setup path /setup/*
+	respond @setup 403
+	reverse_proxy itop:80
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options SAMEORIGIN
+		-Server
+	}
+}
+
+docs.e-delmotte.fr {
+	encode gzip
+	reverse_proxy bookstack:80
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+pilotage.e-delmotte.fr {
+	import pilotage-auth.caddy
+	encode gzip
+	reverse_proxy pilotage:8000
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+}
+
+auto.e-delmotte.fr {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+	# Webhook Kuma : réservé au réseau interne Docker
+	@kuma path /webhook/kuma /webhook/kuma/*
+	handle @kuma {
+		respond 404
+	}
+	# Autres webhooks : ouverts (chaque workflow vérifie son propre secret)
+	@webhook path /webhook/*
+	handle @webhook {
+		reverse_proxy n8n:5678
+	}
+	# Interface : double protection (mot de passe Caddy + compte n8n)
+	handle {
+		import pilotage-auth.caddy
+		reverse_proxy n8n:5678
+	}
+}

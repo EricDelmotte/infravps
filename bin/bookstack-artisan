@@ -1,0 +1,4 @@
+#!/bin/bash
+# Lance artisan dans le conteneur BookStack avec les secrets (non exposés par docker exec)
+S=/opt/stack/bookstack/secrets
+exec docker exec -i -u abc -e DB_PASSWORD="$(cat $S/db_password)" -e APP_KEY="$(cat $S/app_key)" -e MAIL_PASSWORD="$(cat /opt/stack/site-fr/secrets/smtp_password)" bookstack php /app/www/artisan "$@"

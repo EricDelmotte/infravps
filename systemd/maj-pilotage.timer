@@ -1,0 +1,7 @@
+[Unit]
+Description=Verifie toutes les 5 min les mises a jour de Pilotage
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target

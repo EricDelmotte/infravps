@@ -1,0 +1,10 @@
+#!/bin/sh
+# Met a jour le site e-delmotte.fr depuis la branche main (cle de deploiement en lecture seule)
+set -e
+cd /opt/stack/site-fr/src
+export GIT_SSH_COMMAND="ssh -i /root/.ssh/deploy_site_fr -o IdentitiesOnly=yes"
+git fetch -q --depth 1 origin main
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+  git reset -q --hard origin/main
+  logger -t maj-site-fr "site mis a jour : $(git log -1 --format="%h %s")"
+fi

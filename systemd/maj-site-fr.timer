@@ -1,0 +1,7 @@
+[Unit]
+Description=Mise a jour du site e-delmotte.fr toutes les 5 minutes
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target

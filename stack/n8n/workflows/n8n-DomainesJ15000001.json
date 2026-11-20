@@ -1,0 +1,81 @@
+[
+ {
+  "id": "DomainesJ15000001",
+  "name": "Échéances des domaines à J-15 → ticket iTop + tâche",
+  "active": false,
+  "nodes": [
+   {
+    "parameters": {
+     "rule": {
+      "interval": [
+       {
+        "field": "cronExpression",
+        "expression": "5 8 * * *"
+       }
+      ]
+     }
+    },
+    "id": "1dd58f17-ed5a-4cc6-918b-867ec2bdcfaf",
+    "name": "Chaque jour 8 h 05",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1.2,
+    "position": [
+     0,
+     0
+    ]
+   },
+   {
+    "parameters": {},
+    "id": "c93949a8-f33b-44c0-afb6-2f3312210603",
+    "name": "Lancement manuel",
+    "type": "n8n-nodes-base.manualTrigger",
+    "typeVersion": 1,
+    "position": [
+     0,
+     200
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "const ITOP = 'http://itop/webservices/rest.php?version=1.3';\nconst h = this.helpers;\nasync function itop(op) {\n  const body = 'json_data=' + encodeURIComponent(JSON.stringify(op));\n  const r = await h.httpRequest({ method: 'POST', url: ITOP, body, json: true,\n    headers: { 'Auth-Token': $env.ITOP_TOKEN, 'Content-Type': 'application/x-www-form-urlencoded' } });\n  if (r.code !== 0) throw new Error('iTop : ' + r.message);\n  return Object.values(r.objects || {}).map(o => ({ key: o.key, ...o.fields }));\n}\nconst q = s => String(s ?? '').replace(/\\\\/g, '\\\\\\\\').replace(/\"/g, '\\\\\"');\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst frDate = d => new Date(d).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });\nasync function orgEdelmotte() {\n  return (await itop({ operation: 'core/get', class: 'Organization', key: 'SELECT Organization WHERE name LIKE \"e-delmotte%\"', output_fields: 'name' }))[0].key;\n}\n// demandeur d'un ticket : doit appartenir à l'organisation du ticket (premier contact de l'organisation)\nasync function demandeur(orgId) {\n  const p = await itop({ operation: 'core/get', class: 'Person', key: `SELECT Person WHERE org_id = ${Number(orgId)}`, output_fields: 'name' });\n  p.sort((a, b) => Number(a.key) - Number(b.key));\n  return p[0] ? p[0].key : null;\n}\nasync function personne(nom, prenom, orgId, email) {\n  const f = await itop({ operation: 'core/get', class: 'Person', key: `SELECT Person WHERE name = \"${q(nom)}\" AND first_name = \"${q(prenom)}\"`, output_fields: 'name' });\n  if (f[0]) return f[0].key;\n  const c = await itop({ operation: 'core/create', class: 'Person', comment: 'n8n', output_fields: 'name',\n    fields: { name: nom, first_name: prenom, org_id: orgId, email } });\n  return c[0].key;\n}\nasync function assigner(cls, id) {\n  const team = (await itop({ operation: 'core/get', class: 'Team', key: 'SELECT Team WHERE name = \"Support e-delmotte\"', output_fields: 'name' }))[0];\n  const agent = (await itop({ operation: 'core/get', class: 'Person', key: 'SELECT Person WHERE email = \"eric@e-delmotte.com\"', output_fields: 'name' }))[0];\n  if (!team || !agent) return;\n  await itop({ operation: 'core/apply_stimulus', class: cls, key: id, stimulus: 'ev_assign', comment: 'n8n',\n    fields: { team_id: team.key, agent_id: agent.key }, output_fields: 'status' });\n}\n\nconst jour = 86400000, fmt = d => d.toISOString().slice(0, 10);\nconst debut = new Date(), fin = new Date(Date.now() + 15 * jour);\nconst contrats = await itop({ operation: 'core/get', class: 'ProviderContract',\n  key: `SELECT ProviderContract WHERE name LIKE \"OVH – Domaine%\" AND end_date >= \"${fmt(debut)}\" AND end_date <= \"${fmt(fin)}\"`,\n  output_fields: 'name,org_id,organization_name,end_date,description' });\nconst service = (await itop({ operation: 'core/get', class: 'Service', key: 'SELECT Service WHERE name = \"Noms de domaine et DNS\"', output_fields: 'name' }))[0];\nconst faits = [];\nfor (const c of contrats) {\n  const domaine = c.name.replace(/^OVH\\s*[–-]\\s*Domaine\\s*/i, '').trim();\n  const titre = `Échéance du domaine ${domaine}`;\n  const deja = await itop({ operation: 'core/get', class: 'UserRequest',\n    key: `SELECT UserRequest WHERE title LIKE \"${q(titre)}%\" AND start_date > DATE_SUB(NOW(), INTERVAL 40 DAY)`, output_fields: 'ref' });\n  if (deja.length) continue;\n  const manuel = /manuel/i.test(c.description || '');\n  let orgT = c.org_id, caller = await demandeur(orgT);\n  if (!caller) { orgT = await orgEdelmotte(); caller = await demandeur(orgT); }\n  const action = manuel\n    ? `<p><b>Renouvellement manuel.</b> Demander au client (${esc(c.organization_name)}) s'il souhaite continuer. S'il confirme : renouveler dans l'espace client OVH (Facturation &gt; Mes services), puis mettre à jour la date de fin du contrat dans iTop. Sinon : le prévenir par écrit de l'arrêt du site et des e-mails à l'échéance.</p>`\n    : `<p><b>Renouvellement automatique prévu.</b> Vérifier dans l'espace client OVH (Facturation &gt; Mes services) que le renouvellement est bien en automatique et que le moyen de paiement est valide. Aucune action client.</p>`;\n  const desc = `<p>Le domaine <b>${esc(domaine)}</b> arrive à échéance le <b>${frDate(c.end_date)}</b>.</p>${action}<p><small>Rappel automatique n8n (J-15).</small></p>`;\n  const fields = { org_id: orgT, caller_id: caller, title: `${titre} le ${frDate(c.end_date)}`, description: desc, origin: 'mail' };\n  if (service) fields.service_id = service.key;\n  const t = (await itop({ operation: 'core/create', class: 'UserRequest', comment: 'n8n domaines', output_fields: 'ref', fields }))[0];\n  await assigner('UserRequest', t.key);\n  try {\n    await h.httpRequest({ method: 'POST', url: 'http://pilotage:8000/api/tasks', json: true, body: {\n      title: `Domaine ${domaine} : ${manuel ? 'confirmer le renouvellement avec le client' : 'vérifier le renouvellement automatique'}`,\n      client: c.organization_name, platform: 'Nom de domaine', priority: manuel ? 'Haute' : 'Normale', status: 'À faire',\n      due: c.end_date, detail: `Ticket iTop ${t.ref} — échéance le ${frDate(c.end_date)}.` } });\n  } catch (e) { /* le tableau de bord est facultatif */ }\n  faits.push({ domaine, ref: t.ref, manuel });\n}\nreturn [{ json: { ok: true, contrats: contrats.length, tickets: faits } }];"
+    },
+    "id": "d1c00a63-1a6e-48d7-886a-084d07c0629c",
+    "name": "Traitement",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     260,
+     100
+    ]
+   }
+  ],
+  "connections": {
+   "Chaque jour 8 h 05": {
+    "main": [
+     [
+      {
+       "node": "Traitement",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Lancement manuel": {
+    "main": [
+     [
+      {
+       "node": "Traitement",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "settings": {
+   "executionOrder": "v1",
+   "timezone": "Europe/Paris"
+  }
+ }
+]

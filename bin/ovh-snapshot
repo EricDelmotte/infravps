@@ -1,0 +1,19 @@
+#!/opt/ovh-api/bin/python
+"""Remplace le snapshot OVH du VPS (OVH n en garde qu un) : ovh-snapshot "description"."""
+import sys, time, ovh
+N = "vps-c21dda1c.vps.ovh.ca"
+c = ovh.Client(config_file="/etc/ovh.conf")
+desc = sys.argv[1] if len(sys.argv) > 1 else time.strftime("snapshot %Y-%m-%d %H:%M")
+try:
+    c.delete(f"/vps/{N}/snapshot")
+    print("Ancien snapshot en cours de suppression...")
+    for _ in range(60):
+        time.sleep(10)
+        try:
+            c.get(f"/vps/{N}/snapshot")
+        except ovh.exceptions.ResourceNotFoundError:
+            break
+except ovh.exceptions.ResourceNotFoundError:
+    pass
+c.post(f"/vps/{N}/createSnapshot", description=desc)
+print("Snapshot demande :", desc)

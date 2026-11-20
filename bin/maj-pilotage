@@ -1,0 +1,12 @@
+#!/bin/sh
+# Met a jour le tableau de bord Pilotage depuis la branche main (cle de deploiement en lecture seule)
+# et reconstruit le conteneur seulement si le code a change.
+set -e
+cd /opt/stack/pilotage
+export GIT_SSH_COMMAND="ssh -i /root/.ssh/deploy_pilotage -o IdentitiesOnly=yes"
+git fetch -q --depth 1 origin main
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+  git reset -q --hard origin/main
+  docker compose build -q && docker compose up -d --remove-orphans
+  logger -t maj-pilotage "pilotage mis a jour : $(git log -1 --format="%h %s")"
+fi

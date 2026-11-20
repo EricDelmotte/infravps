@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<itop_design xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="3.2">
+  <branding>
+    <login_logo _delta="force">e-delmotte-branding/images/login-logo.png</login_logo>
+    <main_logo _delta="force">e-delmotte-branding/images/main-logo-full.png</main_logo>
+    <main_logo_compact _delta="force">e-delmotte-branding/images/main-logo-compact.png</main_logo_compact>
+    <portal_logo _delta="force">e-delmotte-branding/images/portal-logo.png</portal_logo>
+    <login_favicon _delta="force">e-delmotte-branding/images/favicon.png</login_favicon>
+    <main_favicon _delta="force">e-delmotte-branding/images/favicon.png</main_favicon>
+    <portal_favicon _delta="force">e-delmotte-branding/images/favicon.png</portal_favicon>
+  </branding>
+</itop_design>

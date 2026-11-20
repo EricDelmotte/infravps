@@ -1,0 +1,16 @@
+services:
+  php:
+    build: .
+    image: site-fr-php
+    container_name: site-fr-php
+    restart: unless-stopped
+    volumes:
+      - ./src:/var/www/site-fr:ro
+      - ./msmtprc:/etc/msmtprc:ro
+      - ./secrets/smtp_password:/run/secrets/smtp_password:ro
+      - ./secrets/form_secret:/run/secrets/form_secret:ro
+    networks:
+      - proxy
+networks:
+  proxy:
+    external: true

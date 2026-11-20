@@ -1,0 +1,54 @@
+services:
+  db:
+    image: mariadb:11
+    container_name: bookstack-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: bookstack
+      MARIADB_USER: bookstack
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - db:/var/lib/mysql
+      - ./secrets/db_password:/run/secrets/db_password:ro
+    networks: [interne]
+  bookstack:
+    image: lscr.io/linuxserver/bookstack:latest
+    container_name: bookstack
+    restart: unless-stopped
+    depends_on: [db]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Europe/Paris
+      APP_URL: https://docs.e-delmotte.fr
+      FILE__APP_KEY: /run/secrets/app_key
+      APP_LANG: fr
+      APP_TIMEZONE: Europe/Paris
+      DB_HOST: bookstack-db
+      DB_PORT: "3306"
+      DB_DATABASE: bookstack
+      DB_USERNAME: bookstack
+      FILE__DB_PASSWORD: /run/secrets/db_password
+      MAIL_DRIVER: smtp
+      MAIL_HOST: ssl0.ovh.net
+      MAIL_PORT: "465"
+      MAIL_ENCRYPTION: tls
+      MAIL_USERNAME: no-reply@e-delmotte.com
+      FILE__MAIL_PASSWORD: /run/secrets/smtp_password
+      MAIL_FROM: no-reply@e-delmotte.com
+      MAIL_FROM_NAME: Documentation e-delmotte
+      APP_PROXIES: "*"
+    volumes:
+      - config:/config
+      - ./secrets/app_key:/run/secrets/app_key:ro
+      - ./secrets/db_password:/run/secrets/db_password:ro
+      - /opt/stack/site-fr/secrets/smtp_password:/run/secrets/smtp_password:ro
+    networks: [interne, proxy]
+volumes:
+  db:
+  config:
+networks:
+  interne:
+  proxy:
+    external: true
