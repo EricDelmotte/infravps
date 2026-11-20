@@ -1,0 +1,11 @@
+[Unit]
+Description=Sauvegarde nocturne chiffrée du VPS vers OVH Object Storage (restic)
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sauvegarde-nuit
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=3h
