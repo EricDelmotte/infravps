@@ -136,3 +136,11 @@ status.e-delmotte.com {
 		-Server
 	}
 }
+
+# Alias de secours en .com : renvoient vers les adresses officielles en .fr
+docs.e-delmotte.com {
+	redir https://docs.e-delmotte.fr{uri} 302
+}
+itsm.e-delmotte.com {
+	redir https://itsm.e-delmotte.fr{uri} 302
+}

@@ -1,0 +1,81 @@
+[
+ {
+  "id": "ClotureAuto7J00001",
+  "name": "Tickets résolus depuis 7 jours → clôture iTop",
+  "active": false,
+  "nodes": [
+   {
+    "parameters": {
+     "rule": {
+      "interval": [
+       {
+        "field": "cronExpression",
+        "expression": "10 8 * * *"
+       }
+      ]
+     }
+    },
+    "id": "7f67c13c-bd51-4e12-814d-cc45e095b86f",
+    "name": "Chaque jour 8 h 10",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1.2,
+    "position": [
+     0,
+     0
+    ]
+   },
+   {
+    "parameters": {},
+    "id": "8f4bc931-55b5-4856-9665-741ed597b221",
+    "name": "Lancement manuel",
+    "type": "n8n-nodes-base.manualTrigger",
+    "typeVersion": 1,
+    "position": [
+     0,
+     200
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "const ITOP = 'http://itop/webservices/rest.php?version=1.3';\nconst h = this.helpers;\nasync function itop(op) {\n  const body = 'json_data=' + encodeURIComponent(JSON.stringify(op));\n  const r = await h.httpRequest({ method: 'POST', url: ITOP, body, json: true,\n    headers: { 'Auth-Token': $env.ITOP_TOKEN, 'Content-Type': 'application/x-www-form-urlencoded' } });\n  if (r.code !== 0) throw new Error('iTop : ' + r.message);\n  return Object.values(r.objects || {}).map(o => ({ key: o.key, ...o.fields }));\n}\nconst q = s => String(s ?? '').replace(/\\\\/g, '\\\\\\\\').replace(/\"/g, '\\\\\"');\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst frDate = d => new Date(d).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });\nasync function orgEdelmotte() {\n  return (await itop({ operation: 'core/get', class: 'Organization', key: 'SELECT Organization WHERE name LIKE \"e-delmotte%\"', output_fields: 'name' }))[0].key;\n}\n// demandeur d'un ticket : doit appartenir à l'organisation du ticket (premier contact de l'organisation)\nasync function demandeur(orgId) {\n  const p = await itop({ operation: 'core/get', class: 'Person', key: `SELECT Person WHERE org_id = ${Number(orgId)}`, output_fields: 'name' });\n  p.sort((a, b) => Number(a.key) - Number(b.key));\n  return p[0] ? p[0].key : null;\n}\nasync function personne(nom, prenom, orgId, email) {\n  const f = await itop({ operation: 'core/get', class: 'Person', key: `SELECT Person WHERE name = \"${q(nom)}\" AND first_name = \"${q(prenom)}\"`, output_fields: 'name' });\n  if (f[0]) return f[0].key;\n  const c = await itop({ operation: 'core/create', class: 'Person', comment: 'n8n', output_fields: 'name',\n    fields: { name: nom, first_name: prenom, org_id: orgId, email } });\n  return c[0].key;\n}\nasync function assigner(cls, id) {\n  const team = (await itop({ operation: 'core/get', class: 'Team', key: 'SELECT Team WHERE name = \"Support e-delmotte\"', output_fields: 'name' }))[0];\n  const agent = (await itop({ operation: 'core/get', class: 'Person', key: 'SELECT Person WHERE email = \"eric@e-delmotte.com\"', output_fields: 'name' }))[0];\n  if (!team || !agent) return;\n  await itop({ operation: 'core/apply_stimulus', class: cls, key: id, stimulus: 'ev_assign', comment: 'n8n',\n    fields: { team_id: team.key, agent_id: agent.key }, output_fields: 'status' });\n}\n\n// Clôture automatique des tickets résolus depuis plus de 7 jours sans réaction du client.\nconst faits = [];\nfor (const cls of ['UserRequest', 'Incident']) {\n  const tickets = await itop({ operation: 'core/get', class: cls,\n    key: `SELECT ${cls} WHERE status = \"resolved\" AND resolution_date < DATE_SUB(NOW(), INTERVAL 7 DAY)`,\n    output_fields: 'ref,resolution_date' });\n  for (const t of tickets) {\n    await itop({ operation: 'core/apply_stimulus', class: cls, key: t.key, stimulus: 'ev_close', comment: 'n8n clôture auto',\n      output_fields: 'ref', fields: { public_log: 'Ticket clôturé automatiquement : aucune réponse dans les 7 jours suivant sa résolution. '\n        + 'Si le problème réapparaît, il suffit d\\'ouvrir un nouveau ticket.' } });\n    faits.push(t.ref);\n  }\n}\nreturn [{ json: { ok: true, clotures: faits } }];"
+    },
+    "id": "c412792b-f8b9-4563-848f-57e23a4cc847",
+    "name": "Traitement",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     260,
+     100
+    ]
+   }
+  ],
+  "connections": {
+   "Chaque jour 8 h 10": {
+    "main": [
+     [
+      {
+       "node": "Traitement",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Lancement manuel": {
+    "main": [
+     [
+      {
+       "node": "Traitement",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "settings": {
+   "executionOrder": "v1",
+   "timezone": "Europe/Paris"
+  }
+ }
+]

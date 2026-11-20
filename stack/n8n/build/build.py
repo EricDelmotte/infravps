@@ -185,17 +185,35 @@ def webhook_wf(wid, name, path, js):
                             "Traitement": {"main": [[{"node": "Réponse", "type": "main", "index": 0}]]}},
             "settings": {"executionOrder": "v1", "timezone": "Europe/Paris"}}
 
-def schedule_wf(wid, name, cron, js):
+def schedule_wf(wid, name, cron, js, tname="Chaque jour 8 h 05"):
     sch = {"parameters": {"rule": {"interval": [{"field": "cronExpression", "expression": cron}]}},
-           "id": str(uuid.uuid4()), "name": "Chaque jour 8 h 05", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [0, 0]}
+           "id": str(uuid.uuid4()), "name": tname, "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [0, 0]}
     man = {"parameters": {}, "id": str(uuid.uuid4()), "name": "Lancement manuel", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [0, 200]}
     code = code_node("Traitement", js, [260, 100])
     return {"id": wid, "name": name, "active": False, "nodes": [sch, man, code],
-            "connections": {"Chaque jour 8 h 05": {"main": [[{"node": "Traitement", "type": "main", "index": 0}]]},
+            "connections": {tname: {"main": [[{"node": "Traitement", "type": "main", "index": 0}]]},
                             "Lancement manuel": {"main": [[{"node": "Traitement", "type": "main", "index": 0}]]}},
             "settings": {"executionOrder": "v1", "timezone": "Europe/Paris"}}
 
+CLOTURE = COMMON + r"""
+// Clôture automatique des tickets résolus depuis plus de 7 jours sans réaction du client.
+const faits = [];
+for (const cls of ['UserRequest', 'Incident']) {
+  const tickets = await itop({ operation: 'core/get', class: cls,
+    key: `SELECT ${cls} WHERE status = "resolved" AND resolution_date < DATE_SUB(NOW(), INTERVAL 7 DAY)`,
+    output_fields: 'ref,resolution_date' });
+  for (const t of tickets) {
+    await itop({ operation: 'core/apply_stimulus', class: cls, key: t.key, stimulus: 'ev_close', comment: 'n8n clôture auto',
+      output_fields: 'ref', fields: { public_log: 'Ticket clôturé automatiquement : aucune réponse dans les 7 jours suivant sa résolution. '
+        + 'Si le problème réapparaît, il suffit d\'ouvrir un nouveau ticket.' } });
+    faits.push(t.ref);
+  }
+}
+return [{ json: { ok: true, clotures: faits } }];
+"""
+
 wfs = [
+    schedule_wf("ClotureAuto7J00001", "Tickets résolus depuis 7 jours → clôture iTop", "10 8 * * *", CLOTURE, "Chaque jour 8 h 10"),
     webhook_wf("FormulaireTicket01", "Formulaire de contact → ticket iTop", "formulaire", FORM),
     webhook_wf("KumaIncident000001", "Alerte Uptime Kuma → incident iTop", "kuma", KUMA),
     schedule_wf("DomainesJ15000001", "Échéances des domaines à J-15 → ticket iTop + tâche", "5 8 * * *", DOMAINES),
