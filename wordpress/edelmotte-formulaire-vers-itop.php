@@ -4,9 +4,13 @@
  * Description: Transmet chaque message du formulaire de contact (Contact Form 7 ou WPForms) à n8n, qui crée une demande ou un incident dans iTop.
  * Version: 1.0
  *
- * Installation : copier ce fichier dans wp-content/mu-plugins/ du site, puis ajouter dans wp-config.php :
+ * Installation : copier ce fichier dans wp-content/mu-plugins/ de l'installation, puis ajouter dans wp-config.php :
  *   define('EDM_FORMULAIRE_SECRET', '…');   // même valeur que /opt/stack/n8n/secrets/form_secret sur le VPS
- *   define('EDM_FORMULAIRE_SOURCE', 'e-delmotte.com');
+ *   define('EDM_FORMULAIRE_SITES', 'www.e-delmotte.com,www.arbitre-echecs.fr');
+ * Sur un réseau multisite, seuls les sites listés dans EDM_FORMULAIRE_SITES envoient leurs formulaires
+ * (les sites des clients hébergés sur le même réseau ne sont pas concernés).
+ * Routage côté n8n : www.arbitre-echecs.fr → tâche du tableau de bord Pilotage (pas de ticket) ;
+ * les autres sites → demande ou incident iTop.
  *
  * Champs reconnus (noms de champs du formulaire) :
  *   nom      : your-name, nom, name
@@ -35,12 +39,17 @@ function edm_formulaire_choisir(array $donnees, array $cles): string
 
 function edm_formulaire_envoyer(array $donnees): void
 {
-    if (!defined('EDM_FORMULAIRE_SECRET') || EDM_FORMULAIRE_SECRET === '') {
+    if (!defined('EDM_FORMULAIRE_SECRET') || EDM_FORMULAIRE_SECRET === '' || !defined('EDM_FORMULAIRE_SITES')) {
         return;
+    }
+    $hote = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+    $sites = array_map('trim', explode(',', strtolower(EDM_FORMULAIRE_SITES)));
+    if (!in_array(strtolower($hote), $sites, true)) {
+        return; // site non concerné (ex. site d'un client sur le même réseau)
     }
     $type = strtolower(edm_formulaire_choisir($donnees, ['type', 'your-type']));
     $corps = [
-        'source'    => defined('EDM_FORMULAIRE_SOURCE') ? EDM_FORMULAIRE_SOURCE : wp_parse_url(home_url(), PHP_URL_HOST),
+        'source'    => $hote,
         'type'      => (strpos($type, 'incident') !== false || strpos($type, 'problème') !== false) ? 'incident' : 'demande',
         'nom'       => edm_formulaire_choisir($donnees, ['your-name', 'nom', 'name']),
         'email'     => edm_formulaire_choisir($donnees, ['your-email', 'email']),
