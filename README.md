@@ -58,3 +58,14 @@ sudo docker exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
 Procédures détaillées : livre « Guides du VPS » et « Plateforme e-delmotte » sur docs.e-delmotte.fr.
+
+## Sauvegardes nocturnes
+
+- `bin/sauvegarde-nuit` (installé dans `/usr/local/sbin`), lancé chaque nuit à 3 h 30 par `systemd/sauvegarde-nuit.timer`.
+- Dépôt restic chiffré sur OVH Object Storage (S3, Gravelines) : `s3:https://s3.gra.io.cloud.ovh.net/edelmotte-sauvegardes-vps/restic`.
+- Contenu : dumps des bases (MainWP, iTop, BookStack, n8n), copies à froid SQLite (Uptime Kuma, Pilotage), volumes Docker, `/opt/stack` (dont les secrets et la clé de chiffrement n8n), scripts et unités systemd.
+- Rétention : 7 jours, 4 semaines, 6 mois ; contrôle d'intégrité le dimanche.
+- Bonne fin signalée à la sonde push Uptime Kuma « Sauvegarde nocturne du VPS ».
+- Secrets hors dépôt : `/root/secrets/s3-sauvegardes.env`, `/root/secrets/restic-password` (copie dans Bitwarden et hors ligne), `/root/secrets/kuma-push-url`.
+
+Restaurer : `restic restore latest --target /tmp/restauration --include <chemin>` avec les mêmes variables que le script.
