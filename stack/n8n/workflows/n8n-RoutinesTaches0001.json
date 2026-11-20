@@ -1,0 +1,147 @@
+[
+ {
+  "id": "RoutinesTaches0001",
+  "name": "Routines récurrentes → tâches Pilotage",
+  "active": false,
+  "nodes": [
+   {
+    "parameters": {
+     "rule": {
+      "interval": [
+       {
+        "field": "cronExpression",
+        "expression": "45 7 * * 1"
+       }
+      ]
+     }
+    },
+    "id": "cbe32916-ef45-41c4-9390-f0dc3ec626f8",
+    "name": "Chaque lundi 7 h 45",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1.2,
+    "position": [
+     0,
+     0
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "const PREFIXE = \"[Hebdo]\", ECHEANCE = \"friday\", TACHES = [[\"Revoir les mises à jour en attente dans MainWP\", \"MainWP\", \"Haute\", \"Tableau de bord Pilotage, bloc MainWP, ou MainWP > Mises à jour. Repérer les extensions abandonnées ou les mises à jour majeures.\"], [\"Sauvegarder puis appliquer les mises à jour depuis la ligne du site principal\", \"MainWP\", \"Haute\", \"Sauvegarde de la base des réseaux concernés avant d'appliquer les mises à jour depuis la ligne du site principal dans MainWP.\"], [\"Après une mise à jour du cœur WordPress : lancer « Mettre à jour le réseau » sur chaque réseau\", \"WordPress\", \"Normale\", \"MainWP ne met à jour que la base du site principal. Admin réseau > Tableau de bord > Mettre à jour le réseau (e-delmotte.info, echecs54.org, monclubdechecs.fr, ffechecs.fr, ffechecs.org).\"], [\"Enregistrer les mises à jour majeures comme changement dans iTop\", \"iTop\", \"Normale\", \"Gestion des changements > Nouveau changement (type Normal ou Routine), CIs concernés, plan de retour arrière.\"]];\nconst h = this.helpers, base = 'http://pilotage:8000/api/tasks';\nconst ouvertes = await h.httpRequest({ method: 'GET', url: base, json: true });\nconst now = new Date(), d = new Date(now);\nif (ECHEANCE === 'friday') d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7));\nif (ECHEANCE === 'month') { d.setMonth(d.getMonth() + 1, 0); }\nif (ECHEANCE === 'quarter') { d.setMonth(Math.floor(d.getMonth() / 3) * 3 + 3, 0); }\nconst due = d.toISOString().slice(0, 10);\nconst crees = [];\nfor (const [titre, plateforme, priorite, detail] of TACHES) {\n  const t = `${PREFIXE} ${titre}`;\n  if (ouvertes.some(o => o.title === t)) continue;   // déjà dans la liste : pas de doublon\n  await h.httpRequest({ method: 'POST', url: base, json: true, body: {\n    title: t, client: 'e-delmotte (Eric Delmotte)', platform: plateforme, priority: priorite, status: 'À faire', due, detail } });\n  crees.push(t);\n}\nreturn [{ json: { ok: true, crees } }];"
+    },
+    "id": "2e2cd814-f5b0-4268-82c0-1fd7b8f5ae77",
+    "name": "Tâches hebdo",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     260,
+     0
+    ]
+   },
+   {
+    "parameters": {
+     "rule": {
+      "interval": [
+       {
+        "field": "cronExpression",
+        "expression": "50 7 1 * *"
+       }
+      ]
+     }
+    },
+    "id": "c7e3ecb0-befa-4275-98b9-efe5e8a1e4c1",
+    "name": "Le 1er du mois 7 h 50",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1.2,
+    "position": [
+     0,
+     200
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "const PREFIXE = \"[Mensuel]\", ECHEANCE = \"month\", TACHES = [[\"Faire un snapshot du VPS, puis mettre à jour les images Docker\", \"VPS\", \"Haute\", \"sudo ovh-snapshot \\\"avant mise à jour mensuelle\\\" puis, service par service : sudo docker compose pull && sudo docker compose up -d. Vérifier Kuma ensuite.\"], [\"Vérifier les journaux de sauvegarde\", \"VPS\", \"Normale\", \"Contrôler que les sauvegardes de la nuit se sont bien terminées tout le mois (étape 11 du plan).\"], [\"Relire les alertes Uptime Kuma du mois\", \"Uptime Kuma\", \"Normale\", \"status.e-delmotte.fr : incidents du mois, sondes en pause, sites lents. Incidents iTop [Kuma] du mois.\"], [\"Contrôler les expirations de domaines et de certificats SSL\", \"Nom de domaine\", \"Normale\", \"Domaines : rappel automatique à J-15 déjà en place (vérifier qu'il a tourné). Certificats : alertes Kuma, onglet Certificats SSL des hébergements OVH.\"], [\"Vérifier la sauvegarde du tableau de bord MainWP\", \"MainWP\", \"Normale\", \"Base mainwp et volume WordPress de MainWP inclus dans la sauvegarde du VPS.\"]];\nconst h = this.helpers, base = 'http://pilotage:8000/api/tasks';\nconst ouvertes = await h.httpRequest({ method: 'GET', url: base, json: true });\nconst now = new Date(), d = new Date(now);\nif (ECHEANCE === 'friday') d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7));\nif (ECHEANCE === 'month') { d.setMonth(d.getMonth() + 1, 0); }\nif (ECHEANCE === 'quarter') { d.setMonth(Math.floor(d.getMonth() / 3) * 3 + 3, 0); }\nconst due = d.toISOString().slice(0, 10);\nconst crees = [];\nfor (const [titre, plateforme, priorite, detail] of TACHES) {\n  const t = `${PREFIXE} ${titre}`;\n  if (ouvertes.some(o => o.title === t)) continue;   // déjà dans la liste : pas de doublon\n  await h.httpRequest({ method: 'POST', url: base, json: true, body: {\n    title: t, client: 'e-delmotte (Eric Delmotte)', platform: plateforme, priority: priorite, status: 'À faire', due, detail } });\n  crees.push(t);\n}\nreturn [{ json: { ok: true, crees } }];"
+    },
+    "id": "818af204-6ff7-4476-a594-3b7e14388ab9",
+    "name": "Tâches mensuel",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     260,
+     200
+    ]
+   },
+   {
+    "parameters": {
+     "rule": {
+      "interval": [
+       {
+        "field": "cronExpression",
+        "expression": "55 7 1 1,4,7,10 *"
+       }
+      ]
+     }
+    },
+    "id": "35ca3762-fb5f-4ce1-b426-d94635fafd87",
+    "name": "Début de trimestre 7 h 55",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1.2,
+    "position": [
+     0,
+     400
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "const PREFIXE = \"[Trimestre]\", ECHEANCE = \"quarter\", TACHES = [[\"Faire un test de restauration et l'enregistrer comme changement dans iTop\", \"VPS\", \"Haute\", \"Restaurer une base (ex. iTop ou un sous-site WordPress) dans un environnement de test, vérifier, puis tracer le test comme changement dans iTop.\"], [\"Relire les accès Bitwarden et retirer ceux qui ne servent plus\", \"Autre\", \"Normale\", \"Comptes clients, OVH, WordPress, API : supprimer les accès obsolètes et changer les mots de passe partagés si besoin.\"]];\nconst h = this.helpers, base = 'http://pilotage:8000/api/tasks';\nconst ouvertes = await h.httpRequest({ method: 'GET', url: base, json: true });\nconst now = new Date(), d = new Date(now);\nif (ECHEANCE === 'friday') d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7));\nif (ECHEANCE === 'month') { d.setMonth(d.getMonth() + 1, 0); }\nif (ECHEANCE === 'quarter') { d.setMonth(Math.floor(d.getMonth() / 3) * 3 + 3, 0); }\nconst due = d.toISOString().slice(0, 10);\nconst crees = [];\nfor (const [titre, plateforme, priorite, detail] of TACHES) {\n  const t = `${PREFIXE} ${titre}`;\n  if (ouvertes.some(o => o.title === t)) continue;   // déjà dans la liste : pas de doublon\n  await h.httpRequest({ method: 'POST', url: base, json: true, body: {\n    title: t, client: 'e-delmotte (Eric Delmotte)', platform: plateforme, priority: priorite, status: 'À faire', due, detail } });\n  crees.push(t);\n}\nreturn [{ json: { ok: true, crees } }];"
+    },
+    "id": "533680aa-daba-4a34-b1db-5051cfb2758f",
+    "name": "Tâches trimestre",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     260,
+     400
+    ]
+   }
+  ],
+  "connections": {
+   "Chaque lundi 7 h 45": {
+    "main": [
+     [
+      {
+       "node": "Tâches hebdo",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Le 1er du mois 7 h 50": {
+    "main": [
+     [
+      {
+       "node": "Tâches mensuel",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Début de trimestre 7 h 55": {
+    "main": [
+     [
+      {
+       "node": "Tâches trimestre",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "settings": {
+   "executionOrder": "v1",
+   "timezone": "Europe/Paris"
+  }
+ }
+]
